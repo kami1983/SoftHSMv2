@@ -61,6 +61,39 @@ bash verify-message.sh HelloWorld.txt 0xf08C795D5420C3892f0Df81343Bb65B5b680083C
 
 输出包含尝试的 v 值与恢复出的地址；匹配则显示 `VERIFY OK`。
 
+### 在 Sepolia 转账（HSM 签名 EIP-1559）
+
+依赖（在你的 Python 环境中安装一次）：
+```bash
+python -m pip install web3 rlp eth_keys
+```
+
+环境变量（示例，按需替换）：
+```bash
+export SOFTHSM2_CONF=$(cd .. && pwd)/.local/etc/softhsm2.conf
+export USER_PIN='你的PIN'
+export SEPOLIA_RPC_URL='https://sepolia.infura.io/v3/<你的API密钥>'  # 或其他 RPC
+```
+
+运行示例：
+```bash
+# 从 CSV 第一行地址转给第二行地址 0.001 ETH
+python send-eth-sepolia.py 0.001
+
+# 或显式指定 from/to 的 id（即 CSV 第二列 CKA_ID）
+python send-eth-sepolia.py 0.001 0001 0002
+```
+
+脚本会：
+- 读取 `evm-addresses.csv` 定位 from/to 地址与 id
+- 连接 RPC 获取 nonce、base fee，构造 EIP‑1559 交易（gas=21000，max_priority=1.5 gwei，max_fee≈2×base_fee+priority）
+- 用 `pkcs11-tool` 调用 HSM 私钥（CKM_ECDSA）对交易哈希签名，并做 EIP‑2 低‑s 规范化
+- 广播交易并输出 tx hash 与 Etherscan 链接
+
+注意：
+- 确保 from 地址在 Sepolia 有足够余额（金额 + 矿工费）
+- 如需调整 gas 参数，可编辑 `send-eth-sepolia.py` 内的相关变量
+
 参数说明：
 - 第1参：生成数量（默认 10）
 - 第2参：label 前缀（默认 `user-`）
