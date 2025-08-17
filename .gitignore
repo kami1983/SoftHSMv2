@@ -1,3 +1,66 @@
+# macOS
+.DS_Store
+
+# IDE / Editor
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+
+# Local install prefix
+.local/
+
+# Top-level build directory (out-of-source)
+build/
+
+# CMake (in-source builds)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+CMakeScripts/
+
+# Autotools (generated files)
+aclocal.m4
+autom4te.cache/
+config.log
+config.status
+configure
+libtool
+ltmain.sh
+Makefile
+Makefile.in
+depcomp
+install-sh
+missing
+compile
+config.guess
+config.sub
+
+# Objects / Libraries / Debug
+*.o
+*.lo
+*.la
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.dSYM/
+*.gcda
+*.gcno
+*.gcov
+
+# SoftHSM runtime (project-local tokens)
+.local/var/lib/softhsm/tokens/
+
+# Logs
+*.log
+
 # Automake, autoconf, libtool
 Makefile
 Makefile.in
