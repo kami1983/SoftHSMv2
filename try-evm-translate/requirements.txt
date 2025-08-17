@@ -1,0 +1,7 @@
+cryptography>=45
+eth-utils>=5
+eth-hash[pycryptodome]>=0.7
+pycryptodome>=3.23
+eth-keys>=0.4
+web3>=7
+rlp>=4
