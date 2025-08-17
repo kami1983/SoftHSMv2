@@ -5,3 +5,4 @@ pycryptodome>=3.23
 eth-keys>=0.4
 web3>=7
 rlp>=4
+base58>=2.1

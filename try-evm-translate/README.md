@@ -25,6 +25,20 @@ bash gen-addresses.sh 10 user- 1
 # - pubkeys/           (导出的 SPKI DER 公钥)
 ```
 
+### 批量生成 Solana 地址（Ed25519）
+
+```bash
+# 依赖：requirements.txt 已包含 base58
+# 环境：复用前述 SOFTHSM2_CONF 与 USER_PIN
+
+# 生成 5 个地址，label 前缀为 sol-，从 id=0001 开始
+bash gen-solana-addresses.sh 5 sol- 1
+
+# 输出文件：
+# - solana-addresses.csv  (label,id,address_base58)
+# - solana-pubkeys/       (Ed25519 SPKI DER 公钥)
+```
+
 ### 文本消息签名（EIP-191 personal_sign）
 
 依赖与环境同上；使用 CSV 第一行的 id，或显式指定 id：
