@@ -18,7 +18,7 @@ export SOFTHSM2_CONF=$(cd .. && pwd)/.local/etc/softhsm2.conf
 export USER_PIN='123456'          # 替换为你的用户 PIN
 
 # 生成 10 个地址，label 前缀为 user-，从 id=0001 开始
-bash gen-addresses.sh 10 user- 1
+bash gen-evm-addresses.sh 10 user- 1
 
 # 输出文件：
 # - evm-addresses.csv  (label,id,address,address_eip55)
