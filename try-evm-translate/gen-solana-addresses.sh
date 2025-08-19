@@ -1,62 +1,94 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# 批量生成 Solana 地址
+# 用法: bash gen-solana-addresses.sh <数量> <label前缀> <起始id>
+# 示例: bash gen-solana-addresses.sh 5 sol- 1001
 
-# Inputs
-NUM=${1:-5}
-LABEL_PREFIX=${2:-sol-}
-START=${3:-1001}
+set -e
 
-# Paths
+# 设置路径
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+# 检查参数
+if [ $# -lt 3 ]; then
+    echo "用法: $0 <数量> <label前缀> <起始id>"
+    echo "示例: $0 5 sol- 1001"
+    exit 1
+fi
+
+COUNT=$1
+LABEL_PREFIX=$2
+START_ID=$3
+
+# 检查环境变量
+if [ -z "$SOFTHSM2_CONF" ]; then
+    echo "SOFTHSM2_CONF 环境变量未设置"
+    exit 1
+fi
+
+if [ -z "$USER_PIN" ]; then
+    echo "USER_PIN 环境变量未设置"
+    exit 1
+fi
+
+# 获取模块路径
 MODULE="$REPO_DIR/.local/lib/softhsm/libsofthsm2.dylib"
-OUT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PUB_DIR="$OUT_DIR/solana-pubkeys"
 
-# Env checks
-if [[ -z "${SOFTHSM2_CONF:-}" ]]; then
-  echo "SOFTHSM2_CONF not set. Please export it to your local config path." >&2
-  exit 1
-fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found." >&2
-  exit 1
-fi
-if [[ -z "${USER_PIN:-}" ]]; then
-  echo "USER_PIN env not set." >&2
-  exit 1
+if [ ! -f "$MODULE" ]; then
+    echo "找不到模块: $MODULE"
+    exit 1
 fi
 
-mkdir -p "$PUB_DIR"
-CSV="$OUT_DIR/solana-addresses.csv"
-echo "label,id,address_base58" > "$CSV"
+echo "使用模块: $MODULE"
+echo "生成 $COUNT 个 Solana 地址，label前缀: $LABEL_PREFIX，起始id: $START_ID"
 
-pad4() { printf "%04d" "$1"; }
+# 创建输出目录
+mkdir -p solana-pubkeys
+rm -f solana-addresses.csv
+echo "label,id,address_base58" > solana-addresses.csv
 
-for ((i=0;i<NUM;i++)); do
-  id_dec=$((START + i))
-  id="$(pad4 "$id_dec")"
-  label="${LABEL_PREFIX}${id}"
-  der="$PUB_DIR/${label}-pub.der"
-
-  # 调用 walletkit 生成 Ed25519 地址
-  out_line=$(python3 - "$REPO_DIR" "$MODULE" "$USER_PIN" "$id" "$label" "$der" <<'PY'
+# Python 辅助函数
+PY_HELPER=$(cat <<'PY'
 import sys
-repo, mod, pin, kid, label, out = sys.argv[1:7]
-if repo not in sys.path:
-    sys.path.insert(0, repo)
-from walletkit.sol import generate_address
-addr, spki = generate_address(mod, pin, kid, label)
-open(out, 'wb').write(spki)
-print(addr)
+import os
+sys.path.insert(0, os.path.abspath(sys.argv[1])) # REPO_DIR
+from pkcs11_walletkit.sol import generate_address
+
+module_path = sys.argv[2]
+user_pin = sys.argv[3]
+key_id = sys.argv[4]
+label = sys.argv[5]
+
+try:
+    addr, spki = generate_address(module_path, user_pin, key_id, label)
+    print(addr)
+    # 保存公钥
+    with open(f"solana-pubkeys/{label}-pub.der", "wb") as f:
+        f.write(spki)
+except Exception as e:
+    print(f"ERROR: {e}")
+    sys.exit(1)
 PY
 )
-  if [[ -z "$out_line" ]]; then
-    echo "id=$id 生成失败" >&2; exit 1
-  fi
-  echo "$label,$id,$out_line" >> "$CSV"
-  echo "$label => $out_line"
 
+# 批量生成
+for i in $(seq $START_ID $((START_ID + COUNT - 1))); do
+    id=$(printf "%04d" $i)
+    label="${LABEL_PREFIX}${id}"
+    
+    echo "生成 $label (id=$id)..."
+    
+    # 调用 Python 生成地址
+    read addr < <(python3 -c "$PY_HELPER" "$REPO_DIR" "$MODULE" "$USER_PIN" "$id" "$label")
+    
+    if [ $? -eq 0 ] && [ -n "$addr" ]; then
+        echo "$label,$id,$addr" >> solana-addresses.csv
+        echo "  -> $addr"
+    else
+        echo "  -> 失败"
+    fi
 done
 
-echo "Done. See $CSV and $PUB_DIR/*.der"
+echo "完成！生成 $COUNT 个 Solana 地址"
+echo "结果保存在 solana-addresses.csv"
+echo "公钥保存在 solana-pubkeys/ 目录"
 
