@@ -150,3 +150,5 @@ src/lib/test/softhsm2-negative-mech.conf
 src/lib/test/softhsm2.conf
 src/lib/test/tokens/64d6c3fe-1575-1736-1d26-5ccb28440ea7/
 src/lib/test/tokens/dummy
+
+/walletkit

@@ -118,6 +118,37 @@ python send-eth-sepolia.py 0.001 0001 0002
 - 如需自定义模块路径或曲线，可编辑 `gen-addresses.sh` 内的变量。
 
 * 查看方式：
+
+### 在 Solana Devnet 转账（HSM 签名 Ed25519）
+
+依赖（在你的 Python 环境中安装一次）：
+```bash
+python -m pip install solders requests
+```
+
+环境变量（示例，按需替换）：
+```bash
+export SOFTHSM2_CONF=$(cd .. && pwd)/.local/etc/softhsm2.conf
+export USER_PIN='你的PIN'
+export SOLANA_RPC_URL='https://api.devnet.solana.com'  # 可不设，默认为 devnet
+```
+
+准备地址（见“批量生成 Solana 地址”小节，生成 `solana-addresses.csv`）：
+
+运行示例：
+```bash
+# 从 CSV 第一行地址转给第二行地址 0.1 SOL（单位：SOL）
+python send-sol-devnet.py 0.1
+
+# 或显式指定 from_id 与目标地址（Base58）
+python send-sol-devnet.py 0.1 1001 <目标Base58地址>
+```
+
+脚本会：
+- 读取 `solana-addresses.csv` 定位 from/to 地址与 id
+- 获取区块哈希、构造转账消息（legacy Message）
+- 用 PKCS#11（EDDSA/Ed25519）在 HSM 内签名，组装原始交易并通过 JSON‑RPC 广播
+- 输出交易签名与 Solscan 链接（Devnet）
 ```
 # 摘要（32B）
 wc -c HelloWorld.txt.digest.bin

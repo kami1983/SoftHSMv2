@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-import os, sys, csv, subprocess, tempfile, pathlib, json
+import os, sys, csv, subprocess, tempfile, pathlib
 from decimal import Decimal
-from eth_utils import keccak, to_checksum_address
-from eth_keys import keys
 from web3 import Web3
-import rlp
+
+# 允许直接导入项目内 walletkit
+REPO_DIR = pathlib.Path(__file__).resolve().parents[1]
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+
+from walletkit import Pkcs11Signer, EvmTransactor  # noqa: E402
 
 
 def load_csv_first_two(csv_path):
@@ -25,29 +29,6 @@ def load_csv_first_two(csv_path):
 def to_bytes_address(addr_hex: str) -> bytes:
     ah = Web3.to_checksum_address(addr_hex)
     return bytes.fromhex(ah[2:])
-
-
-def build_eip1559_sign_payload(chain_id, nonce, max_priority, max_fee, gas, to_addr, value, data=b"", access_list=None):
-    if access_list is None:
-        access_list = []
-    # Types: integers are big-endian without leading 0x00, bytes are raw
-    payload = [
-        chain_id,
-        nonce,
-        max_priority,
-        max_fee,
-        gas,
-        to_addr,   # 20-byte or b'' for creation
-        value,
-        data,
-        access_list,
-    ]
-    return payload
-
-
-def rlp_encode_eip1559_with_sig(payload, y_parity, r, s) -> bytes:
-    lst = payload + [y_parity, r, s]
-    return b"\x02" + rlp.encode(lst)
 
 
 def main():
@@ -110,54 +91,16 @@ def main():
     data = b""
     access_list = []
 
-    payload = build_eip1559_sign_payload(
+    # 使用 walletkit 进行签名打包
+    signer = Pkcs11Signer(module_path=module_path, user_pin=user_pin)
+    evm = EvmTransactor(signer, chain_id)
+
+    payload = EvmTransactor.eip1559_payload(
         chain_id, nonce, max_priority, max_fee, gas_limit,
         bytes.fromhex(recipient[2:]), value, data, access_list
     )
-    sign_rlp = b"\x02" + rlp.encode(payload)
-    digest = keccak(sign_rlp)
+    raw_tx = evm.sign_eip1559(key_id=from_id, payload=payload, from_address_checksum=sender)
 
-    # 调用 pkcs11-tool 以 CKM_ECDSA 签名 digest
-    with tempfile.NamedTemporaryFile(delete=False) as tf_in, tempfile.NamedTemporaryFile(delete=False) as tf_out:
-        tf_in.write(digest)
-        tf_in.flush()
-        cmd = [
-            'pkcs11-tool', '--module', module_path,
-            '-l', '--pin', user_pin,
-            '--id', from_id, '--mechanism', 'ECDSA', '--sign',
-            '-i', tf_in.name, '-o', tf_out.name, '--signature-format', 'rs'
-        ]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            print('签名失败:', r.stderr, file=sys.stderr); sys.exit(1)
-        sig = pathlib.Path(tf_out.name).read_bytes()
-    if len(sig) != 64:
-        print('签名长度错误，应为64字节 r||s', file=sys.stderr); sys.exit(1)
-    r_int = int.from_bytes(sig[:32], 'big')
-    s_int = int.from_bytes(sig[32:], 'big')
-
-    # 恢复 yParity (v)
-    y_parity = None
-    for v in (0, 1):
-        try:
-            rec = keys.Signature(vrs=(v, r_int, s_int)).recover_public_key_from_msg_hash(digest)
-            addr = to_checksum_address(rec.to_address())
-            if addr.lower() == sender.lower():
-                y_parity = v
-                break
-        except Exception:
-            pass
-    if y_parity is None:
-        print('无法恢复出发送者地址，签名可能不匹配', file=sys.stderr); sys.exit(1)
-
-    # EIP-2 低S规范化：若 s > n/2，替换为 n - s 并翻转 y_parity
-    SECP256K1_N = int("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
-    HALF_N = SECP256K1_N // 2
-    if s_int > HALF_N:
-        s_int = SECP256K1_N - s_int
-        y_parity ^= 1
-
-    raw_tx = rlp_encode_eip1559_with_sig(payload, y_parity, r_int, s_int)
     tx_hash = w3.eth.send_raw_transaction(raw_tx)
     tx_hex = '0x' + tx_hash.hex()
     print('tx hash:', tx_hex)
