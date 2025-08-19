@@ -32,7 +32,7 @@ bash gen-evm-addresses.sh 10 user- 1
 # 环境：复用前述 SOFTHSM2_CONF 与 USER_PIN
 
 # 生成 5 个地址，label 前缀为 sol-，从 id=0001 开始
-bash gen-solana-addresses.sh 5 sol- 1
+bash gen-solana-addresses.sh 5 sol- 1001
 
 # 输出文件：
 # - solana-addresses.csv  (label,id,address_base58)
